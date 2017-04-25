@@ -1,9 +1,3 @@
-// The sample robotarm model.  You should build a file
-// very similar to this for when you make your model.
-#pragma warning (disable : 4305)
-#pragma warning (disable : 4244)
-#pragma warning(disable : 4786)
-
 #include "modelerview.h"
 #include "modelerapp.h"
 #include "modelerdraw.h"
@@ -13,279 +7,328 @@
 #include <FL/gl.h>
 #include <stdlib.h>
 
-#define M_DEFAULT 2.0f
-#define M_OFFSET 3.0f
-#define P_OFFSET 0.3f
-#define MAX_VEL 200
-#define MIN_STEP 0.1
+#ifndef M_PI
+#define M_PI 3.141592653589793238462643383279502
+#endif
 
-
-
-
-// This is a list of the controls for the RobotArm
+// This is a list of the controls for the SampleModel
 // We'll use these constants to access the values 
 // of the controls from the user interface.
-enum RobotArmControls
-{ 
-    BASE_ROTATION=0, LOWER_TILT, UPPER_TILT, CLAW_ROTATION,
-        BASE_LENGTH, LOWER_LENGTH, UPPER_LENGTH, PARTICLE_COUNT, NUMCONTROLS, 
-};
-
-void ground(float h);
-void base(float h);
-void rotation_base(float h);
-void lower_arm(float h);
-void upper_arm(float h);
-void claw(float h);
-void y_box(float h);
-
-// To make a RobotArm, we inherit off of ModelerView
-class RobotArm : public ModelerView 
+enum SampleModelControls
 {
-public:
-    RobotArm(int x, int y, int w, int h, char *label) 
-        : ModelerView(x,y,w,h,label) {}
-    virtual void draw();
+	XPOS, YPOS, ZPOS, TURN, STATE, NUMCONTROLS
 };
 
-// We need to make a creator function, mostly because of
-// nasty API stuff that we'd rather stay away from.
-ModelerView* createRobotArm(int x, int y, int w, int h, char *label)
-{ 
-    return new RobotArm(x,y,w,h,label); 
-}
+// Colors
+#define COLOR_RED		1.0f, 0.0f, 0.0f
+#define COLOR_GREEN		0.0f, 1.0f, 0.0f
+#define COLOR_BLUE		0.0f, 0.0f, 1.0f
 
 // We'll be getting the instance of the application a lot; 
 // might as well have it as a macro.
 #define VAL(x) (ModelerApplication::Instance()->GetControlValue(x))
 
 
+// To make a SampleModel, we inherit off of ModelerView
 
+class SampleModel : public ModelerView
+{
+public:
+	SampleModel(int x, int y, int w, int h, char *label)
+		: ModelerView(x, y, w, h, label) { }
 
+	virtual void draw();
+};
+
+// We need to make a creator function, mostly because of
+// nasty API stuff that we'd rather stay away from.
+ModelerView* createSampleModel(int x, int y, int w, int h, char *label)
+{
+	return new SampleModel(x, y, w, h, label);
+}
+
+static double leftArmOffset = 0;
+static double leftArmIncrement = 0;
+static double rightArmOffset = 0;
+static double rightArmIncrement = 0;
+static double headOffset = 0;
 
 // We are going to override (is that the right word?) the draw()
-// method of ModelerView to draw out RobotArm
-void RobotArm::draw()
+// method of ModelerView to draw out SampleModel
+void SampleModel::draw()
 {
-	/* pick up the slider values */
+	const float AMBIENT_R = 0.1;
+	const float AMBIENT_G = 0.1;
+	const float AMBIENT_B = 0.1;
 
-	float theta = VAL( BASE_ROTATION );
-	float phi = VAL( LOWER_TILT );
-	float psi = VAL( UPPER_TILT );
-	float cr = VAL( CLAW_ROTATION );
-	float h1 = VAL( BASE_LENGTH );
-	float h2 = VAL( LOWER_LENGTH );
-	float h3 = VAL( UPPER_LENGTH );
-	float pc = VAL( PARTICLE_COUNT );
+	const float FLOOR_TX = -5;
+	const float FLOOR_TY = -3.5;
+	const float FLOOR_TZ = -5;
 
+	const double BOX_X = 10;
+	const double BOX_Y = 0.01;
+	const double BOX_Z = 10;
 
-    // This call takes care of a lot of the nasty projection 
-    // matrix stuff
-    ModelerView::draw();
+	const float BOTTOM_TX = 0;
+	const float BOTTOM_TY = -1.8;
+	const float BOTTOM_TZ = 0;
+	const float BOTTOM_SPHERE_SIZE = 1.7;
 
-	static GLfloat lmodel_ambient[] = {0.4,0.4,0.4,1.0};
+	const float MIDDLE_TX = 0;
+	const float MIDDLE_TY = 2.5;
+	const float MIDDLE_TZ = 0;
+	const float MIDDLE_SPHERE_SIZE = 1.3;
 
-	// define the model
+	const float TOP_TX = 0;
+	const float TOP_TY = 1.8;
+	const float TOP_TZ = 0;
+	const float TOP_SPHERE_SIZE = 0.9;
 
-	ground(-0.2);
+	const float ARM_CYLINDER_HEIGHT = 1;
+	const float ARM_CYLINDER_R = 0.05;
 
-	base(0.8);
+	const float LARM_TX = 1.1;
+	const float RARM_TX = -1.1;
+	const float ARM_TY = 0.4;
+	const float ARM_TZ = 0;
 
-    glTranslatef( 0.0, 0.8, 0.0 );			// move to the top of the base
-    glRotatef( theta, 0.0, 1.0, 0.0 );		// turn the whole assembly around the y-axis. 
-	rotation_base(h1);						// draw the rotation base
+	const float HAND_TX = 0;
+	const float HAND_TY = 0;
+	const float HAND_TZ = 1.05;
+	const float HAND_SPHERE_SIZE = 0.24;
 
-    glTranslatef( 0.0, h1, 0.0 );			// move to the top of the base
-    glRotatef( phi, 0.0, 0.0, 1.0 );		// rotate around the z-axis for the lower arm
-	glTranslatef( -0.1, 0.0, 0.4 );
-	lower_arm(h2);							// draw the lower arm
+	const float LEYE_TX = 0.4;
+	const float REYE_TX = -0.4;
+	const float EYE_TY = 0.3;
+	const float EYE_TZ = 0.8;
+	const float EYE_SPHERE_SIZE = 0.1;
 
-    glTranslatef( 0.0, h2, 0.0 );			// move to the top of the lower arm
-    glRotatef( psi, 0.0, 0.0, 1.0 );		// rotate  around z-axis for the upper arm
-	upper_arm(h3);							// draw the upper arm
+	const float NOSE_CYLINDER_HEIGHT = 1;
+	const float NOSE_CYLINDER_R1 = 0.2;
+	const float NOSE_CYLINDER_R2 = 0;
 
-	glTranslatef( 0.0, h3, 0.0 );
-	glRotatef( cr, 0.0, 0.0, 1.0 );
-	claw(1.0);
+	const float NOSE_TX = 0;
+	const float NOSE_TY = 0;
+	const float NOSE_TZ = 0.8;
 
-	//*** DON'T FORGET TO PUT THIS IN YOUR OWN CODE **/
-	endDraw();
-}
+	if (ModelerApplication::Instance()->Animating()) {
+		if (leftArmOffset <= -60) {
+			leftArmIncrement = 1.1;
+		}
+		else if (leftArmOffset >= 0) {
+			leftArmIncrement = -1.1;
+		}
 
-void ground(float h) 
-{
-	glDisable(GL_LIGHTING);
-	glColor3f(0.65,0.45,0.2);
-	glPushMatrix();
-	glScalef(30,0,30);
-	y_box(h);
-	glPopMatrix();
-	glEnable(GL_LIGHTING);
-}
+		if (rightArmOffset >= 60) {
+			rightArmIncrement = -1.1;
+		}
+		else if (rightArmOffset <= 0) {
+			rightArmIncrement = 1.1;
+		}
 
-void base(float h) {
-	setDiffuseColor( 0.25, 0.25, 0.25 );
-	setAmbientColor( 0.25, 0.25, 0.25 );
-	glPushMatrix();
-		glPushMatrix();
-			glTranslatef(1.0, h / 2.0, 0.75);
-			drawCylinder(0.25, h / 2.0, h / 2.0);
-		glPopMatrix();
-		glPushMatrix();
-			glTranslatef(1.0, h / 2.0, -1.0);
-			drawCylinder(0.25, h / 2.0, h / 2.0);
-		glPopMatrix();
-		glPushMatrix();
-			glTranslatef(-1.0, h / 2.0, 0.75);
-			drawCylinder(0.25, h / 2.0, h / 2.0);
-		glPopMatrix();
-		glPushMatrix();
-			glTranslatef(-1.0, h / 2.0, -1.0);
-			drawCylinder(0.25, h / 2.0, h / 2.0);
-		glPopMatrix();
-	glScalef(4.0f, h, 4.0f);
-	y_box(1.0f);
-	glPopMatrix();
-}
+		leftArmOffset += leftArmIncrement;
+		rightArmOffset += rightArmIncrement;
 
-void rotation_base(float h) {
-	setDiffuseColor( 0.85, 0.75, 0.25 );
-	setAmbientColor( 0.95, 0.75, 0.25 );
-	glPushMatrix();
-		glPushMatrix();
-			glScalef(4.0, h, 4.0);
-			y_box(1.0f); // the rotation base
-		glPopMatrix();
-		setDiffuseColor( 0.15, 0.15, 0.65 );
-		setAmbientColor( 0.15, 0.15, 0.65 );
-		glPushMatrix();
-			glTranslatef(-0.5, h, -0.6);
-			glScalef(2.0, h, 1.6);
-			y_box(1.0f); // the console
-		glPopMatrix();
-		setDiffuseColor( 0.65, 0.65, 0.65 );
-		setAmbientColor( 0.65, 0.65, 0.65 );
-		glPushMatrix();
-			glTranslatef( 0.5, h, 0.6 );
-			glRotatef( -90.0, 1.0, 0.0, 0.0 );
-			drawCylinder( h, 0.05, 0.05 ); // the pipe
-		glPopMatrix();
-	glPopMatrix();
-}
+		headOffset += 2.5;
+		if (headOffset > 360) {
+			headOffset -= 360;
+		}
+	}
 
-void lower_arm(float h) {					// draw the lower arm
-	setDiffuseColor( 0.85, 0.75, 0.25 );
-	setAmbientColor( 0.95, 0.75, 0.25 );
-	y_box(h);
-}
+	const double LARM_ANGLE = 20 + leftArmOffset;
+	const double RARM_ANGLE = 160 + rightArmOffset;
+	const double HEAD_ANGLE = 0 + headOffset;
 
-void upper_arm(float h) {					// draw the upper arm
-	setDiffuseColor( 0.85, 0.75, 0.25 );
-	setAmbientColor( 0.95, 0.75, 0.25 );
-	glPushMatrix();
-	glScalef( 1.0, 1.0, 0.7 );
-	y_box(h);
-	glPopMatrix();
-}
+	// This call takes care of a lot of the nasty projection 
+	// matrix stuff.  Unless you want to fudge directly with the 
+	// projection matrix, don't bother with this ...
+	ModelerView::draw();
 
-void claw(float h) {
-	setDiffuseColor( 0.25, 0.25, 0.85 );
-	setAmbientColor( 0.25, 0.25, 0.85 );
+	// set background color
+	setAmbientColor(AMBIENT_R, AMBIENT_G, AMBIENT_B);
 
-	glBegin( GL_TRIANGLES );
+	// draw floor
+	setDiffuseColor(COLOR_RED);
+	glPushMatrix(); //open floor
+	glTranslated(FLOOR_TX, FLOOR_TY, FLOOR_TZ);
+	drawBox(BOX_X, BOX_Y, BOX_Z);
+	glPopMatrix(); //close floor
 
-	glNormal3d( 0.0, 0.0, 1.0);		// +z side
-	glVertex3d( 0.5, 0.0, 0.5);
-	glVertex3d(-0.5, 0.0, 0.5);
-	glVertex3d( 0.5,   h, 0.5);
+				   // draw the sample model
+	setDiffuseColor(1.0f, 1.0f, 1.0f);
 
-	glNormal3d( 0.0, 0.0, -1.0);	// -z side
-	glVertex3d( 0.5, 0.0, -0.5);
-	glVertex3d(-0.5, 0.0, -0.5);
-	glVertex3d( 0.5,   h, -0.5);
+	glPushMatrix(); //open model
+	glTranslated(VAL(XPOS), VAL(YPOS), VAL(ZPOS));
+	glRotated(VAL(TURN), 0.0, 1.0, 0.0);
 
-	glEnd();
+	if (!VAL(STATE)) {
 
-	glBegin( GL_QUADS );
+		glPushMatrix(); //open bottom sphere
+		glTranslated(BOTTOM_TX, BOTTOM_TY, BOTTOM_TZ);
+		drawSphere(BOTTOM_SPHERE_SIZE);
 
-	glNormal3d( 1.0,  0.0,  0.0);	// +x side
-	glVertex3d( 0.5, 0.0,-0.5);
-	glVertex3d( 0.5, 0.0, 0.5);
-	glVertex3d( 0.5,   h, 0.5);
-	glVertex3d( 0.5,   h,-0.5);
+		glPushMatrix(); //open middle sphere
+		glTranslated(MIDDLE_TX, MIDDLE_TY, MIDDLE_TZ);
+		drawSphere(MIDDLE_SPHERE_SIZE);
 
-	glNormal3d( 0.0,-1.0, 0.0);		// -y side
-	glVertex3d( 0.5, 0.0, 0.5);
-	glVertex3d( 0.5, 0.0,-0.5);
-	glVertex3d(-0.5, 0.0,-0.5);
-	glVertex3d(-0.5, 0.0, 0.5);
+		glPushMatrix(); //open right arm
 
-	glEnd();
-}
+		setDiffuseColor(0.65f, 0.16f, 0.16f);
 
-void y_box(float h) {
+		glTranslated(RARM_TX, ARM_TY, ARM_TZ);
+		glRotated(90, 0.0, 1.0, 0.0);
+		glRotated(RARM_ANGLE, 1.0, 0.0, 0.0);
+		drawCylinder(ARM_CYLINDER_HEIGHT, ARM_CYLINDER_R, ARM_CYLINDER_R);
 
-	glBegin( GL_QUADS );
+		setDiffuseColor(1.0f, 1.0f, 1.0f);
 
-	glNormal3d( 1.0 ,0.0, 0.0);			// +x side
-	glVertex3d( 0.25,0.0, 0.25);
-	glVertex3d( 0.25,0.0,-0.25);
-	glVertex3d( 0.25,  h,-0.25);
-	glVertex3d( 0.25,  h, 0.25);
+		glPushMatrix();//open right hand
+		glTranslated(HAND_TX, HAND_TY, HAND_TZ);
+		drawSphere(HAND_SPHERE_SIZE);
+		glPopMatrix(); //close right hand
 
-	glNormal3d( 0.0 ,0.0, -1.0);		// -z side
-	glVertex3d( 0.25,0.0,-0.25);
-	glVertex3d(-0.25,0.0,-0.25);
-	glVertex3d(-0.25,  h,-0.25);
-	glVertex3d( 0.25,  h,-0.25);
+		glPopMatrix(); //close right arm
 
-	glNormal3d(-1.0, 0.0, 0.0);			// -x side
-	glVertex3d(-0.25,0.0,-0.25);
-	glVertex3d(-0.25,0.0, 0.25);
-	glVertex3d(-0.25,  h, 0.25);
-	glVertex3d(-0.25,  h,-0.25);
+		glPushMatrix(); //open left arm
 
-	glNormal3d( 0.0, 0.0, 1.0);			// +z side
-	glVertex3d(-0.25,0.0, 0.25);
-	glVertex3d( 0.25,0.0, 0.25);
-	glVertex3d( 0.25,  h, 0.25);
-	glVertex3d(-0.25,  h, 0.25);
+		setDiffuseColor(0.65f, 0.16f, 0.16f);
 
-	glNormal3d( 0.0, 1.0, 0.0);			// top (+y)
-	glVertex3d( 0.25,  h, 0.25);
-	glVertex3d( 0.25,  h,-0.25);
-	glVertex3d(-0.25,  h,-0.25);
-	glVertex3d(-0.25,  h, 0.25);
+		glTranslated(LARM_TX, ARM_TY, ARM_TZ);
+		glRotated(90, 0.0, 1.0, 0.0);
+		glRotated(LARM_ANGLE, 1.0, 0.0, 0.0);
+		drawCylinder(ARM_CYLINDER_HEIGHT, ARM_CYLINDER_R, ARM_CYLINDER_R);
 
-	glNormal3d( 0.0,-1.0, 0.0);			// bottom (-y)
-	glVertex3d( 0.25,0.0, 0.25);
-	glVertex3d(-0.25,0.0, 0.25);
-	glVertex3d(-0.25,0.0,-0.25);
-	glVertex3d( 0.25,0.0,-0.25);
+		setDiffuseColor(1.0f, 1.0f, 1.0f);
 
-	glEnd();
+		glPushMatrix(); //open left hand
+		glTranslated(HAND_TX, HAND_TY, HAND_TZ);
+		drawSphere(HAND_SPHERE_SIZE);
+		glPopMatrix(); //close left hand
+
+		glPopMatrix(); //close left arm
+
+		glPushMatrix(); // open top sphere
+		glTranslated(TOP_TX, TOP_TY, TOP_TZ);
+		glRotated(VAL(TURN), 0.0, 1.0, 0.0);
+		glRotated(HEAD_ANGLE, 0.0, 1.0, 0.0);
+		drawSphere(TOP_SPHERE_SIZE);
+
+		setDiffuseColor(0.0f, 0.0f, 0.0f);
+
+		glPushMatrix(); //open left eye
+		glTranslated(LEYE_TX, EYE_TY, EYE_TZ);
+		drawSphere(EYE_SPHERE_SIZE);
+		glPopMatrix(); //close left eye
+
+		glPushMatrix(); //open right eye
+		glTranslated(REYE_TX, EYE_TY, EYE_TZ);
+		drawSphere(EYE_SPHERE_SIZE);
+		glPopMatrix(); //close right eye
+
+		setDiffuseColor(1.0f, 0.0f, 0.0f);
+
+		glPushMatrix(); //open nose
+		glTranslated(NOSE_TX, NOSE_TY, NOSE_TZ);
+		drawCylinder(NOSE_CYLINDER_HEIGHT, NOSE_CYLINDER_R1, NOSE_CYLINDER_R2);
+		glPopMatrix(); //close nose
+
+		glPopMatrix(); // close top sphere
+
+		glPopMatrix(); //close middle sphere
+
+		glPopMatrix(); //close bottom sphere
+	}
+	else {
+
+		glPushMatrix(); //open bottom box
+		glTranslated(-1.3, -3.3, -1.5);
+		drawBox(2.6, 2.6, 2.6);
+
+		glPushMatrix(); //open middle box
+		glTranslated(0.25, 2.6, 0.25);
+		drawBox(2.1, 2.1, 2.1);
+
+		glPushMatrix(); //open right arm
+
+		setDiffuseColor(0.65f, 0.16f, 0.16f);
+
+		glTranslated(0, 1, 1);
+		glRotated(90, 0.0, 1.0, 0.0);
+		glRotated(160, 1.0, 0.0, 0.0);
+		drawCylinder(ARM_CYLINDER_HEIGHT, ARM_CYLINDER_R, ARM_CYLINDER_R);
+
+		setDiffuseColor(1.0f, 1.0f, 1.0f);
+
+		glPushMatrix();//open right hand
+		glTranslated(HAND_TX, HAND_TY, HAND_TZ);
+		drawSphere(HAND_SPHERE_SIZE);
+		glPopMatrix(); //close right hand
+
+		glPopMatrix(); //close right arm
+
+		glPushMatrix(); //open left arm
+
+		setDiffuseColor(0.65f, 0.16f, 0.16f);
+
+		glTranslated(2.1, 1, 1);
+		glRotated(90, 0.0, 1.0, 0.0);
+		glRotated(20, 1.0, 0.0, 0.0);
+		drawCylinder(ARM_CYLINDER_HEIGHT, ARM_CYLINDER_R, ARM_CYLINDER_R);
+
+		setDiffuseColor(1.0f, 1.0f, 1.0f);
+
+		glPushMatrix(); //open left hand
+		glTranslated(HAND_TX, HAND_TY, HAND_TZ);
+		drawSphere(HAND_SPHERE_SIZE);
+		glPopMatrix(); //close left hand
+
+		glPopMatrix(); //close left arm
+
+		glPushMatrix(); //open top box
+		glTranslated(0.25, 2.1, 0.25);
+		drawBox(1.6, 1.6, 1.6);
+
+		setDiffuseColor(0.0f, 0.0f, 0.0f);
+
+		glPushMatrix(); //open left eye
+		glTranslated(1.2, 1.1, 1.6);
+		drawSphere(EYE_SPHERE_SIZE);
+		glPopMatrix(); //close left eye
+
+		glPushMatrix(); //open right eye
+		glTranslated(0.4, 1.1, 1.6);
+		drawSphere(EYE_SPHERE_SIZE);
+		glPopMatrix(); //close right eye
+
+		setDiffuseColor(1.0f, 0.0f, 0.0f);
+
+		glPushMatrix(); //open nose
+		glTranslated(0.8, 0.7, 1.4);
+		drawCylinder(NOSE_CYLINDER_HEIGHT, NOSE_CYLINDER_R1, NOSE_CYLINDER_R2);
+		glPopMatrix(); //close nose
+
+		glPopMatrix(); //close top box
+
+		glPopMatrix(); //close middle box
+
+		glPopMatrix();//close bottom box
+	}
+
+	glPopMatrix(); //close model
 }
 
 int main()
 {
-    ModelerControl controls[NUMCONTROLS ];
+	// Initialize the controls
+	// Constructor is ModelerControl(name, minimumvalue, maximumvalue, 
+	// stepsize, defaultvalue)
+	ModelerControl controls[NUMCONTROLS];
+	controls[XPOS] = ModelerControl("X Position", -5, 5, 0.1f, 0);
+	controls[YPOS] = ModelerControl("Y Position", 0, 5, 0.1f, 0);
+	controls[ZPOS] = ModelerControl("Z Position", -5, 5, 0.1f, 0);
+	controls[TURN] = ModelerControl("Turn", -90, 90, 10, 0);
+	controls[STATE] = ModelerControl("State", 0, 1, 1, 0);
 
-	controls[BASE_ROTATION] = ModelerControl("base rotation (theta)", -180.0, 180.0, 0.1, 0.0 );
-    controls[LOWER_TILT] = ModelerControl("lower arm tilt (phi)", 15.0, 95.0, 0.1, 55.0 );
-    controls[UPPER_TILT] = ModelerControl("upper arm tilt (psi)", 0.0, 135.0, 0.1, 30.0 );
-	controls[CLAW_ROTATION] = ModelerControl("claw rotation (cr)", -30.0, 180.0, 0.1, 0.0 );
-    controls[BASE_LENGTH] = ModelerControl("base height (h1)", 0.5, 10.0, 0.1, 0.8 );
-    controls[LOWER_LENGTH] = ModelerControl("lower arm length (h2)", 1, 10.0, 0.1, 3.0 );
-    controls[UPPER_LENGTH] = ModelerControl("upper arm length (h3)", 1, 10.0, 0.1, 2.5 );
-    controls[PARTICLE_COUNT] = ModelerControl("particle count (pc)", 0.0, 5.0, 0.1, 5.0 );
-    
-
-
-	// You should create a ParticleSystem object ps here and then
-	// call ModelerApplication::Instance()->SetParticleSystem(ps)
-	// to hook it up to the animator interface.
-
-    ModelerApplication::Instance()->Init(&createRobotArm, controls, NUMCONTROLS);
-
-    return ModelerApplication::Instance()->Run();
+	ModelerApplication::Instance()->Init(&createSampleModel, controls, NUMCONTROLS);
+	return ModelerApplication::Instance()->Run();
 }
